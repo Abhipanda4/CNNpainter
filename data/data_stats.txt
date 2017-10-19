@@ -1,0 +1,14 @@
+DATA STATISTICS FOR PAINTER BY NUMBERS DATASET:
+================================================
+
+Number of Unique Images: 79433
+Number of Unique Artists: 1584
+
+Mean Number of Paintings per artist: 50.1470959596
+Standard Deviation of Number of Paintings: 69.4649588587
+
+Artist ID with Maximum Paintings: 3cc9a44380296d93e68b71a27643c25f
+Number of Paintings by this artist: 413
+
+Artist ID with Minimum Paintings: 139e4feb4346b2ef87afb7be838e8220
+Number of Paintings by this artist: 4
