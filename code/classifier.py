@@ -5,10 +5,9 @@ from keras.layers.advanced_activations import PReLU
 from keras.regularizers import l2
 from keras.constraints import max_norm
 from keras import backend as K
-from keras.utils import plot_model
 from keras.callbacks import ReduceLROnPlateau
 from keras.optimizers import Adam
-from keras.utils import plot_model
+from keras.callbacks import ModelCheckpoint
 
 img_height, img_width = 256, 256
 
@@ -17,13 +16,14 @@ validation_data_dir = "../PROCESSED_DATA/VALIDATION"
 # train_data_dir = "./test_train"
 # validation_data_dir = "./test_validation"
 
-nb_train_samples = 463094
-nb_validation_samples = 92937
+nb_train_samples = 281997
+nb_validation_samples = 56453
 # nb_train_samples = 288
 # nb_validation_samples = 48
 epochs = 50
 batch_size = 16
 L2REG=0.001
+FINAL_OUT_SIZE=300
 W_INIT='he_normal'
 
 if K.image_data_format() == 'channels_first':
@@ -87,14 +87,14 @@ def _design_model():
     model.add(BatchNormalization())
     model.add(PReLU(alpha_initializer=W_INIT))
     model.add(Dropout(rate=0.4))
-    model.add(Dense(2048, kernel_regularizer=l2(L2REG)))
+    model.add(Dense(512, kernel_regularizer=l2(L2REG)))
     model.add(BatchNormalization())
     model.add(PReLU(alpha_initializer=W_INIT))
     model.add(Dropout(rate=0.4))
-    model.add(Dense(1584, kernel_regularizer=l2(L2REG), activation='softmax'))
+    model.add(Dense(FINAL_OUT_SIZE, kernel_regularizer=l2(L2REG), activation='softmax'))
 
     # SVG(model_to_dot(model).create(prog='dot', format='svg'))
-    plot_model(model, show_shapes=True, to_file='model.png')
+    # plot_model(model, show_shapes=True, to_file='model.png')
 
     return model
 
@@ -154,20 +154,19 @@ def _train_model():
             optimizer=adam,
             metrics=['accuracy'])
 
-
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5,
                   patience=5, min_lr=0.0000008)
+    checkpt = ModelCheckpoint("weights.{epoch:02d}-{val_loss:.2f}.hdf5")
+
     model.fit_generator(
             train_generator,
             steps_per_epoch=nb_train_samples // batch_size,
             epochs=epochs,
             use_multiprocessing=True,
-	    callbacks=[reduce_lr],
+            callbacks=[reduce_lr, checkpt],
             validation_data=validation_generator,
             validation_steps=nb_validation_samples // batch_size)
-    model.save_weights('weights.h5')
 
 
 if __name__ == "__main__":
     _train_model()
-    # _design_model();
