@@ -148,7 +148,7 @@ def _train_model():
             )
 
     model = _design_model()
-    adam = Adam(lr=0.000074)
+    adam = Adam(lr=0.00008)
     model.compile(
             loss='categorical_crossentropy',
             optimizer=adam,
@@ -157,7 +157,6 @@ def _train_model():
 
     reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5,
                   patience=5, min_lr=0.0000008)
-    model.save_weights('weights.h5')
     model.fit_generator(
             train_generator,
             steps_per_epoch=nb_train_samples // batch_size,
@@ -166,8 +165,9 @@ def _train_model():
 	    callbacks=[reduce_lr],
             validation_data=validation_generator,
             validation_steps=nb_validation_samples // batch_size)
+    model.save_weights('weights.h5')
 
 
 if __name__ == "__main__":
-    # _train_model()
-    _design_model();
+    _train_model()
+    # _design_model();
