@@ -4,6 +4,9 @@ import shutil
 import csv
 from PIL import Image
 from PIL import ImageFile
+from collections import defaultdict
+import numpy as np
+import operator
 
 
 INIT_DIR = "/home/abhipanda/CNNpainter/data"
@@ -11,6 +14,8 @@ WORKING_DIR = "/home/abhipanda/CNNpainter/data/train"
 SAVE_DIR = "/home/abhipanda/CNNpainter/data/PROCESSED_DATA"
 TRAIN_DIR = os.path.join(SAVE_DIR, "TRAIN")
 VALIDATION_DIR = os.path.join(SAVE_DIR, "VALIDATION")
+TEST_DIR = os.path.join(INIT_DIR, "TEST")
+TEST_INIT = os.path.join(INIT_DIR, "test")
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 class DataProcessing(object):
@@ -19,13 +24,20 @@ class DataProcessing(object):
     painters and keeping them in separate directories
     """
 
-    def __init__(self, INPUT_DIM, PROCESSING_DIM):
+    def __init__(self, INPUT_DIM, PROCESSING_DIM, todelete):
         self.PROCESSING_DIM = PROCESSING_DIM
         self.INPUT_DIM = INPUT_DIM
-        shutil.rmtree(SAVE_DIR)
-        os.mkdir(SAVE_DIR)
-        os.mkdir(TRAIN_DIR)
-        os.mkdir(VALIDATION_DIR)
+        if todelete:
+            shutil.rmtree(SAVE_DIR)
+        if not os.path.exists(SAVE_DIR):
+            os.mkdir(SAVE_DIR)
+        if not os.path.exists(TRAIN_DIR):
+            os.mkdir(TRAIN_DIR)
+        if not os.path.exists(VALIDATION_DIR):
+            os.mkdir(VALIDATION_DIR)
+        if not os.path.exists(TEST_DIR):
+            os.mkdir(TEST_DIR)
+
 
 
     def __painting_by_artist(self):
@@ -50,7 +62,7 @@ class DataProcessing(object):
 
         Takes the image file path as parameter
         """
-        try: 
+        try:
             imgobj = Image.open(f).convert('RGB')
         except:
             return None
@@ -107,7 +119,7 @@ class DataProcessing(object):
         return res
 
 
-    def arrange_by_artists(self):
+    def arrange_by_artists(self, isTest):
         """
         Splits the image set into training and validation directories.
         Augments data by rotating the original images
@@ -123,6 +135,10 @@ class DataProcessing(object):
             self.__save_to_dir(imagelist[:num_train], "train", TRAIN_DIR)
             self.__save_to_dir(imagelist[num_train:], "validation", VALIDATION_DIR)
             print("Batch Completed.")
+
+
+    def test(self, k):
+        self.__topK_train(k)
 
 
     def __save_to_dir(self, imagelist, prefix, PATH):
@@ -174,6 +190,8 @@ class DataProcessing(object):
     def __augmented_images(self, info, start):
         """
         Function to return a list of all the transformed images
+        The list elements are tuples of the form:
+        (image object, artistID, filename)
         """
         count = start
         final_img_to_save = []
@@ -194,3 +212,88 @@ class DataProcessing(object):
             print("Augmenting image: {:05}".format(count))
             count += 1
         return final_img_to_save
+
+
+    def __topK_train(self, k):
+        """
+        Returns a list of top K artists in training set in the form of their IDs
+        """
+        f = open("train_info.csv")
+        reader = csv.DictReader(f, delimiter=",")
+        artists = []
+        for line in reader:
+            artists.append(line['artist'])
+        freqs = defaultdict(int)
+        for artist in artists:
+            freqs[artist] += 1
+
+        sorted_freqs = sorted(freqs.items(), key=operator.itemgetter(1))
+        final_list = list(reversed(sorted_freqs))
+        res = []
+        for pair in final_list[:k]:
+            res.append(pair[0])
+            if not os.path.exists(os.path.join(TEST_DIR, pair[0])):
+                os.mkdir(os.path.join(TEST_DIR, pair[0]))
+        return res
+
+
+    def __test_and_train(self):
+        """
+        returns a list of tuples. Each tuple consists of the artist name and filename
+        of painting. The artist is such that his/her painting is also present in the
+        training set
+        """
+        f = open("all_data_info.csv")
+        reader = csv.DictReader(f, delimiter=",")
+        data = []
+        for line in reader:
+            if line['artist_group'] == "train_and_test" and line["in_train"] == "False":
+                # the img's artist is in training set
+                # but the img is in test set only
+                data.append((line['artist'], line['new_filename']))
+
+        return data
+
+
+    def __ID_to_name_mapping(self):
+        f1 = open("train_info.csv")
+        f2 = open("all_data_info.csv")
+
+        reader1 = csv.DictReader(f1, delimiter=",")
+        reader2 = csv.DictReader(f2, delimiter=",")
+
+        # create dict: id -> name
+        dict = {}
+        for line1 in reader1:
+            id = line1['artist']
+            work = line1['filename']
+            for line2 in reader2:
+                if line2['new_filename'] == work:
+                    dict[id] = line2['artist']
+                    break
+
+        return dict
+
+
+    def create_test_images(self, k):
+        """
+        args: k -> Number of top artists to consider from the training set
+        Keeps top k artists from the training set in the test set
+        """
+        train_artists = self.__topK_train(k)
+        available_test_artists = self.__test_and_train()
+        idtoname = self.__ID_to_name_mapping()
+        for artist_id in train_artists:
+            # scan all his/her images in the test set
+            # if found, create folder accordingly
+            artist_name = idtoname[artist_id]
+            for name, file in available_test_artists:
+                if name == artist_name:
+                    filepath = os.path.join(TEST_DIR, artist_id)
+                    if not os.path.exists(filepath):
+                        os.mkdir(filepath)
+                    # shutil.copyfile(os.path.join(TEST_INIT, file), os.path.join(filepath, file))
+                    processedImage = self.__processImage(os.path.join(TEST_INIT, file))
+                    print("Saving test_", file, "by artist: ", name)
+                    processedImage.save(os.path.join(filepath, "test_" + file))
+
